@@ -1,0 +1,16 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "C:/Users/saihe/Documents/workspace/Practice_PubSub/frontend",
+        "run",
+        "dev"
+      ],
+      "port": 3000
+    }
+  ]
+}

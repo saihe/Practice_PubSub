@@ -1,0 +1,61 @@
+server:
+  port: 8080
+  # REST エンドポイントは各コントローラのマッピングで /api 配下に固定する。
+  # (context-path は使わない。空マッピングだと HATEOAS のリンク生成が失敗するため、
+  #  ルートも含めてパスを明示する方式にしている。)
+
+spring:
+  application:
+    name: pubsub-tasks
+
+  datasource:
+    # デモ用途のためインメモリ H2。DB_CLOSE_DELAY=-1 で JVM 稼働中はデータを保持する。
+    url: jdbc:h2:mem:pubsub;DB_CLOSE_DELAY=-1;MODE=LEGACY
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+    show-sql: false
+
+  h2:
+    console:
+      # ステータススタック(append-only テーブル)を直接覗けるように H2 コンソールを公開。
+      # 起動後 http://localhost:8080/h2-console から JDBC URL: jdbc:h2:mem:pubsub で接続。
+      enabled: true
+      path: /h2-console
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+# ===== アプリ固有設定 (AppProperties にバインド) =====
+app:
+  task:
+    # 1件あたりの処理間隔(ms)。100ms => おおよそ毎秒10件。
+    item-interval-ms: 100
+    # キュー投入時に決定する「全体件数」の下限・上限。
+    total-count-min: 10
+    total-count-max: 100
+    # 失敗(=件数カウントのみ)とする倍数。9の倍数を失敗させる。
+    failure-multiple: 9
+    # 進捗イベントを積む間隔(件数)。10件ごと=およそ1秒ごとにステータスを stack する。
+    progress-event-every: 10
+    # 1タスクあたりで「例外による異常終了」を発生させる確率(0.0〜1.0)。
+    # 9の倍数失敗は警告終了どまりなので、異常終了(ERROR)を観測するための擬似的な例外注入。
+    # 0.0 にすると異常終了は発生しなくなる。
+    exception-probability: 0.10
+
+# CORS 許可オリジン(フロントエンド)。docker compose ではホストの 3000 番からアクセスされる。
+cors:
+  allowed-origins: "http://localhost:3000"
+
+logging:
+  level:
+    com.example.pubsub: INFO
