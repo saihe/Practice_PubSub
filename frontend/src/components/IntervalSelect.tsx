@@ -26,7 +26,7 @@ export function IntervalSelect({
     <Listbox value={value} onChange={onChange}>
       <div className="relative">
         <label className="mb-1 block text-xs font-medium text-slate-500">
-          自動更新間隔
+          切断時の再取得間隔
         </label>
         <ListboxButton className="relative w-32 cursor-pointer rounded-md border border-slate-300 bg-white py-2 pl-3 pr-9 text-left text-sm shadow-sm hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500">
           <span className="block truncate">{value} 秒ごと</span>

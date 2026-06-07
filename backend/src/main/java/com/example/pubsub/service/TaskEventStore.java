@@ -40,7 +40,7 @@ public class TaskEventStore {
                                   int successCount, int failCount, int totalCount, String message) {
         TaskStatusEvent event = persist(taskId, status, processedCount, successCount, failCount, message);
         publisher.publish(new TaskStatusChangedEvent(
-                taskId, status, processedCount, totalCount, event.getOccurredAt()));
+                event.getId(), taskId, status, processedCount, totalCount, event.getOccurredAt()));
         return event;
     }
 }

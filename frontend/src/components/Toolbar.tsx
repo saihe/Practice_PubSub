@@ -14,6 +14,7 @@ export function Toolbar({
   intervalSeconds,
   onIntervalChange,
   lastUpdated,
+  live,
 }: {
   onCreate: () => void;
   onRefresh: () => void;
@@ -25,6 +26,7 @@ export function Toolbar({
   intervalSeconds: IntervalSeconds;
   onIntervalChange: (v: IntervalSeconds) => void;
   lastUpdated: Date | null;
+  live: boolean;
 }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -64,7 +66,20 @@ export function Toolbar({
 
       <div className="flex items-end gap-4">
         <div className="text-right text-xs text-slate-500">
-          <div>自動更新: {intervalSeconds} 秒ごと</div>
+          <div className="flex items-center justify-end gap-1.5">
+            <span
+              className={`inline-block h-2 w-2 rounded-full ${
+                live ? "animate-pulse bg-emerald-500" : "bg-slate-300"
+              }`}
+              aria-hidden
+            />
+            <span>{live ? "リアルタイム接続中（SSE）" : "リアルタイム未接続"}</span>
+          </div>
+          <div>
+            {live
+              ? "自動更新: SSE リアルタイム（ポーリング停止）"
+              : `未接続: ${intervalSeconds} 秒ごとに再取得`}
+          </div>
           <div>
             最終更新: {lastUpdated ? formatClock(lastUpdated) : "—"}
             {refreshing && <span className="ml-1 text-blue-500">●</span>}

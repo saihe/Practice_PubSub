@@ -11,9 +11,15 @@ import {
   fetchTasks,
   resolveTasksHref,
 } from "@/lib/api";
-import type { TaskResource, TaskStatus } from "@/lib/types";
+import type { Links, TaskResource, TaskSnapshot, TaskStatus } from "@/lib/types";
 
 const DEFAULT_INTERVAL: IntervalSeconds = 10;
+
+/** 終端に達したタスクからは中止リンクを落とす(以後は中止不可)。 */
+function omitCancel(links: Links): Links {
+  const { cancel, ...rest } = links;
+  return rest;
+}
 
 function toneForStatus(status: TaskStatus): ToastTone {
   switch (status) {
@@ -39,6 +45,8 @@ export default function Page() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [streamHref, setStreamHref] = useState<string | null>(null);
+  const [live, setLive] = useState(false);
 
   // HATEOAS で発見したリンクと、通知制御用の集合。
   const tasksHrefRef = useRef<string | null>(null);
@@ -87,6 +95,10 @@ export default function Page() {
         if (links["create"]?.href) {
           createHrefRef.current = links["create"].href;
         }
+        // SSE(リアルタイム配信)の購読先を HATEOAS リンクから発見。
+        if (links["stream"]?.href) {
+          setStreamHref((prev) => prev ?? links["stream"].href);
+        }
         detectTerminals(fetched);
         setTasks(fetched);
         setLastUpdated(new Date());
@@ -96,6 +108,28 @@ export default function Page() {
       } finally {
         if (showSpinner) setRefreshing(false);
       }
+    },
+    [detectTerminals],
+  );
+
+  // SSE で push された1件のスナップショットを一覧へ反映(リンクは手元の値を温存)。
+  const mergeTask = useCallback(
+    (snap: TaskSnapshot) => {
+      setTasks((prev) => {
+        const idx = prev.findIndex((t) => t.taskId === snap.taskId);
+        if (idx === -1) {
+          // 一覧未取得のタスク(別タブ等で発生)。リンクは次のポーリングで補完。
+          return [{ ...snap, _links: {} }, ...prev];
+        }
+        const existing = prev[idx];
+        const links = snap.terminal ? omitCancel(existing._links) : existing._links;
+        const next = [...prev];
+        next[idx] = { ...existing, ...snap, _links: links };
+        return next;
+      });
+      // 終端到達ならその場で通知(ポーリングを待たない)。
+      detectTerminals([{ ...snap, _links: {} }]);
+      setLastUpdated(new Date());
     },
     [detectTerminals],
   );
@@ -118,13 +152,45 @@ export default function Page() {
     };
   }, [loadTasks]);
 
-  // 自動更新: 選択間隔ごとにフェッチ(画面を開いている間ずっと有効)。
+  // リアルタイム配信: HATEOAS で発見した stream リンクへ EventSource を張る。
+  // 進捗・終端が push されるたびに該当行を即時更新し、終端ならスナックバー通知。
+  // 取りこぼし対策は2段構え: サーバ側は Last-Event-ID で未受信分を再送(EventSource が
+  // 自動付与・自動再接続)。クライアント側は接続/再接続のたびに1回だけ reconcile フェッチ。
   useEffect(() => {
+    if (!streamHref) return;
+    const es = new EventSource(streamHref);
+    es.addEventListener("connected", () => {
+      setLive(true);
+      // 再接続直後に一覧を取り直して整合(Last-Event-ID 再送の隙間も埋める backstop)。
+      void loadTasks(false);
+    });
+    es.addEventListener("task", (e) => {
+      try {
+        const snap = JSON.parse((e as MessageEvent).data) as TaskSnapshot;
+        mergeTask(snap);
+      } catch {
+        // 不正なペイロードは無視(次のイベント/再接続時の reconcile で回復)。
+      }
+    });
+    es.onerror = () => {
+      // ブラウザが自動再接続する。切断中は下のフォールバックポーリングが補う。
+      setLive(false);
+    };
+    return () => {
+      es.close();
+      setLive(false);
+    };
+  }, [streamHref, mergeTask, loadTasks]);
+
+  // フォールバック更新: SSE が切断されている間だけ間隔ポーリングで再同期する。
+  // SSE が健全なとき(live)はリアルタイム反映に任せ、冗長なフェッチは行わない。
+  useEffect(() => {
+    if (live) return;
     const id = setInterval(() => {
       void loadTasks(true);
     }, intervalSeconds * 1000);
     return () => clearInterval(id);
-  }, [intervalSeconds, loadTasks]);
+  }, [live, intervalSeconds, loadTasks]);
 
   const handleCreate = useCallback(async () => {
     const href = createHrefRef.current;
@@ -174,6 +240,8 @@ export default function Page() {
         <p className="mt-1 text-sm text-slate-500">
           「タスク実行（追加）」でジョブをキュー(トピック)へ publish し、バックエンドの購読側ワーカが
           非同期に処理します。ステータスは変更ではなく append-only で積み上げ、最新を表示しています。
+          画面はサーバからの <span className="font-medium">SSE（リアルタイム配信）</span>で更新し、
+          終端到達と同時に通知します（接続が切れている間だけ自動更新でフォールバック）。
         </p>
       </header>
 
@@ -198,6 +266,7 @@ export default function Page() {
           intervalSeconds={intervalSeconds}
           onIntervalChange={setIntervalSeconds}
           lastUpdated={lastUpdated}
+          live={live}
         />
 
         <TaskTable

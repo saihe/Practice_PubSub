@@ -16,4 +16,10 @@ public interface TaskStatusEventRepository extends JpaRepository<TaskStatusEvent
 
     /** 指定タスク・指定ステータスの最初のイベント(例: 開始時刻の取得に使用)。 */
     Optional<TaskStatusEvent> findFirstByTaskIdAndStatusOrderByIdAsc(String taskId, TaskStatus status);
+
+    /**
+     * 指定 id より後に積まれたイベントを古い順で取得する。
+     * SSE 再接続時の {@code Last-Event-ID} に基づく取りこぼし再送に使う。
+     */
+    List<TaskStatusEvent> findByIdGreaterThanOrderByIdAsc(Long id);
 }

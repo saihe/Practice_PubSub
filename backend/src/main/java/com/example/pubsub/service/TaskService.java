@@ -106,6 +106,15 @@ public class TaskService {
         return taskRepository.findById(taskId).map(this::buildView);
     }
 
+    /**
+     * 指定 id より後に積まれたステータスイベントを古い順で返す。
+     * SSE 再接続時の {@code Last-Event-ID} に基づく取りこぼし再送に使う。
+     */
+    @Transactional(readOnly = true)
+    public List<TaskStatusEvent> statusEventsAfter(long lastEventId) {
+        return eventRepository.findByIdGreaterThanOrderByIdAsc(lastEventId);
+    }
+
     /** 指定タスクの積み上がったステータス履歴(スタック)。 */
     @Transactional(readOnly = true)
     public Optional<List<TaskStatusEvent>> getStatusHistory(String taskId) {

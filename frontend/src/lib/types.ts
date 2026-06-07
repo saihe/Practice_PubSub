@@ -46,3 +46,10 @@ export interface TaskCollection {
   tasks: TaskResource[];
   links: Links;
 }
+
+/**
+ * SSE(リアルタイム配信)で push されるタスクのスナップショット。
+ * バックエンドの TaskView をそのまま JSON 化したもの。リンクは含まないため、
+ * フロントは手元の `_links` を温存しつつフィールドだけをマージする。
+ */
+export type TaskSnapshot = Omit<TaskResource, "_links">;
